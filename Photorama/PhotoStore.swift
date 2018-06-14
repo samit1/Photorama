@@ -24,6 +24,9 @@ enum PhotoError : Error {
 
 class PhotoStore {
     
+    let imageStore = ImageStore()
+    
+    
     private let session: URLSession = {
         let config = URLSessionConfiguration.default
         return URLSession(configuration: config)
@@ -31,10 +34,28 @@ class PhotoStore {
 
     func fetchImage(for photo: Photo, completion: @escaping (ImageResult) -> Void) {
         let photoURL = photo.remoteURL
+        let photKey = photo.photoID
+        
+        /// See if image is cached or stored locally
+        /// If so, that is an early exit
+        if let image = imageStore.image(forKey: photKey) {
+            OperationQueue.main.addOperation {
+                completion(.success(image))
+            }
+            return
+        }
+        
+        /// Otherwise, proceed with making a request
         let request = URLRequest(url: photoURL)
         
         let task = session.dataTask(with: request) { (data, response, error) in
             let result = self.processImageRequest(data: data, error: error)
+ 
+            /// If the result is a success,
+            /// then set a local variable called image
+            if case let .success(image) = result {
+                self.imageStore.setImage(image, forKey: photKey)
+            }
             
             OperationQueue.main.addOperation {
                 completion(result)
